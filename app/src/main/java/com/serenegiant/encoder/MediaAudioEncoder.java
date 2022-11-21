@@ -45,7 +45,7 @@ public class MediaAudioEncoder extends MediaEncoder {
         mTrackIndex = -1;
         mMuxerStarted = mIsEOS = false;
         // prepare MediaCodec for AAC encoding of audio data from inernal mic.
-        final MediaCodecInfo audioCodecInfo = selectAudioCodec(MIME_TYPE);
+        final MediaCodecInfo audioCodecInfo = selectAudioCodec();
         if (audioCodecInfo == null) {
             Log.e(TAG, "Unable to find an appropriate codec for " + MIME_TYPE);
             return;
@@ -66,8 +66,8 @@ public class MediaAudioEncoder extends MediaEncoder {
         // 声道数
         audioFormat.setInteger(MediaFormat.KEY_CHANNEL_COUNT, CHANNEL_COUNT);
         // 编解码器中数据缓冲区最大大小的键，以字节(byte)为单位
-//		audioFormat.setLong(MediaFormat.KEY_MAX_INPUT_SIZE, inputFile.length());
-//      audioFormat.setLong(MediaFormat.KEY_DURATION, (long)durationInMs );
+        // audioFormat.setLong(MediaFormat.KEY_MAX_INPUT_SIZE, inputFile.length());
+        // audioFormat.setLong(MediaFormat.KEY_DURATION, (long)durationInMs );
         if (DEBUG) Log.i(TAG, "format: " + audioFormat);
         mMediaCodec = MediaCodec.createEncoderByType(MIME_TYPE);
         // MediaCodec.CONFIGURE_FLAG_ENCODE 表示编码
@@ -134,10 +134,11 @@ public class MediaAudioEncoder extends MediaEncoder {
                     try {
                         audioRecord = new AudioRecord(
                                 source, // audioSource，音频采集的来源
-                                SAMPLE_RATE, // 音频采样率
-                                AudioFormat.CHANNEL_IN_MONO, // 声道：单声道、双声道等
-                                AudioFormat.ENCODING_PCM_16BIT, // 音频采样精度，指定采样的数据的格式和每次采样的大小，只支持8位和16位。
-                                buffer_size // 缓冲区大小，用于存放AudioRecord采集到的音频数据
+                                SAMPLE_RATE, // sampleRateInHz，音频采样率
+                                AudioFormat.CHANNEL_IN_MONO, // channelConfig，声道：单声道、双声道等
+                                AudioFormat.ENCODING_PCM_16BIT, // audioFormat，音频采样精度，指定采样的数据的格式和每次采样的大小，只支持8位和16位。
+                                // PCM代表脉冲编码调制，它实际上是原始的音频样本。16位将占用更多的空间和处理能力，但是表示的音频将更接近真实。
+                                buffer_size // bufferSizeInBytes，缓冲区大小，用于存放AudioRecord采集到的音频数据
                         );
                         // AudioRecord.STATE_INITIALIZED：初始完毕
                         if (audioRecord.getState() != AudioRecord.STATE_INITIALIZED)
@@ -151,15 +152,15 @@ public class MediaAudioEncoder extends MediaEncoder {
                     try {
                         if (mIsCapturing) {
                             if (DEBUG) Log.v(TAG, "AudioThread:start audio recording");
-                            // 系统级的内存分配
+                            // 字节缓冲区：系统级的内存分配
                             // https://blog.csdn.net/seebetpro/article/details/49184305
                             final ByteBuffer buf = ByteBuffer.allocateDirect(SAMPLES_PER_FRAME);
                             int readBytes;
                             // 开始录制
                             audioRecord.startRecording();
                             try {
-                                for (; mIsCapturing && !mRequestStop && !mIsEOS; ) {
-                                    // read audio data from internal mic
+                                while (mIsCapturing && !mRequestStop && !mIsEOS) {
+                                    // read audio pcm data from internal mic
                                     buf.clear();
                                     readBytes = audioRecord.read(buf, SAMPLES_PER_FRAME);
                                     if (readBytes > 0) {
@@ -170,6 +171,7 @@ public class MediaAudioEncoder extends MediaEncoder {
                                         // set audio data to encoder
                                         buf.position(readBytes);
                                         // 调用flip方法来改变状态，才能正确的读到刚刚写入的数据
+                                        // flip方法把limit设为当前position，把position设为0，一般在从Buffer读出数据前调用。
                                         buf.flip();
                                         encode(buf, readBytes, getPTSUs());
                                         frameAvailableSoon();
@@ -206,7 +208,7 @@ public class MediaAudioEncoder extends MediaEncoder {
                     synchronized (this) {
                         try {
                             wait(50);
-                        } catch (final InterruptedException e) {
+                        } catch (final InterruptedException ignored) {
                         }
                     }
                 }
@@ -218,30 +220,26 @@ public class MediaAudioEncoder extends MediaEncoder {
     /**
      * select the first codec that match a specific MIME type
      * 选择与特定MIME类型匹配的第一个编解码器
-     *
-     * @param mimeType
-     * @return
      */
-    private static final MediaCodecInfo selectAudioCodec(final String mimeType) {
+    private static MediaCodecInfo selectAudioCodec() {
         if (DEBUG) Log.v(TAG, "selectAudioCodec:");
         MediaCodecInfo result = null;
         // get the list of available codecs
         // 获取可用编解码器列表
-        final int numCodecs = MediaCodecList.getCodecCount();
+        // 过时：final int numCodecs = MediaCodecList.getCodecCount();
+        MediaCodecList mediaCodecList = new MediaCodecList(MediaCodecList.ALL_CODECS);
+        MediaCodecInfo[] codecInfoList = mediaCodecList.getCodecInfos();
         LOOP:
-        for (int i = 0; i < numCodecs; i++) {
-            final MediaCodecInfo codecInfo = MediaCodecList.getCodecInfoAt(i);
-            if (!codecInfo.isEncoder()) {    // skipp decoder
+        for (final MediaCodecInfo codecInfo : codecInfoList) {
+            if (!codecInfo.isEncoder()) {   // skipp decoder
                 continue;
             }
             final String[] types = codecInfo.getSupportedTypes();
-            for (int j = 0; j < types.length; j++) {
-                if (DEBUG) Log.i(TAG, "supportedType:" + codecInfo.getName() + ",MIME=" + types[j]);
-                if (types[j].equalsIgnoreCase(mimeType)) {
-                    if (result == null) {
-                        result = codecInfo;
-                        break LOOP;
-                    }
+            for (String type : types) {
+                if (DEBUG) Log.i(TAG, "supportedType:" + codecInfo.getName() + ",MIME=" + type);
+                if (type.equalsIgnoreCase(MIME_TYPE)) {
+                    result = codecInfo;
+                    break LOOP;
                 }
             }
         }
