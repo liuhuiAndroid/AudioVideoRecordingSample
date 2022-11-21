@@ -1,0 +1,5 @@
+AudioVideoRecordingSample
+
+AudioRecord 实现录音
+AudioTrack 实现播放声音
+研究：ByteBuffer
