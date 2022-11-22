@@ -69,6 +69,7 @@ public class MediaAudioEncoder extends MediaEncoder {
         // audioFormat.setLong(MediaFormat.KEY_MAX_INPUT_SIZE, inputFile.length());
         // audioFormat.setLong(MediaFormat.KEY_DURATION, (long)durationInMs );
         if (DEBUG) Log.i(TAG, "format: " + audioFormat);
+
         mMediaCodec = MediaCodec.createEncoderByType(MIME_TYPE);
         // MediaCodec.CONFIGURE_FLAG_ENCODE 表示编码
         mMediaCodec.configure(audioFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);

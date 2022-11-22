@@ -115,7 +115,7 @@ public class CameraFragment extends Fragment {
 			mRecordButton.setColorFilter(0xffff0000);
 			// if you record audio only, ".m4a" is also OK.
 			// M4A是MPEG-4 音频标准的文件的扩展名。
-			mMuxer = new MediaMuxerWrapper(".mp4");
+			mMuxer = new MediaMuxerWrapper(".mp4", getContext());
 			if (true) {
 				// for video capturing，capture：捕获
 				new MediaVideoEncoder(mMuxer, mMediaEncoderListener, mCameraView.getVideoWidth(), mCameraView.getVideoHeight());

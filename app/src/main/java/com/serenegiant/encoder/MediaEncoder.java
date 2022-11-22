@@ -11,17 +11,18 @@ import android.util.Log;
 import com.serenegiant.audiovideosample.BuildConfig;
 
 public abstract class MediaEncoder implements Runnable {
+
     private static final boolean DEBUG = BuildConfig.DEBUG;
-    private static final String TAG = "MediaEncoder";
+    private static final String TAG = MediaEncoder.class.getSimpleName();
 
     protected static final int TIMEOUT_USEC = 10000;    // 10[msec]
-    protected static final int MSG_FRAME_AVAILABLE = 1;
-    protected static final int MSG_STOP_RECORDING = 9;
+//    protected static final int MSG_FRAME_AVAILABLE = 1;
+//    protected static final int MSG_STOP_RECORDING = 9;
 
     public interface MediaEncoderListener {
-        public void onPrepared(MediaEncoder encoder);
+        void onPrepared(MediaEncoder encoder);
 
-        public void onStopped(MediaEncoder encoder);
+        void onStopped(MediaEncoder encoder);
     }
 
     protected final Object mSync = new Object();
@@ -54,7 +55,7 @@ public abstract class MediaEncoder implements Runnable {
      */
     protected MediaCodec mMediaCodec;                // API >= 16(Android4.1.2)
     /**
-     * Weak refarence of MediaMuxerWarapper instance
+     * Weak reference of MediaMuxerWrapper instance
      */
     protected final WeakReference<MediaMuxerWrapper> mWeakMuxer;
     /**
@@ -67,25 +68,26 @@ public abstract class MediaEncoder implements Runnable {
     public MediaEncoder(final MediaMuxerWrapper muxer, final MediaEncoderListener listener) {
         if (listener == null) throw new NullPointerException("MediaEncoderListener is null");
         if (muxer == null) throw new NullPointerException("MediaMuxerWrapper is null");
-        mWeakMuxer = new WeakReference<MediaMuxerWrapper>(muxer);
+        mWeakMuxer = new WeakReference<>(muxer);
         muxer.addEncoder(this);
         mListener = listener;
         synchronized (mSync) {
             // create BufferInfo here for effectiveness(to reduce GC)
+            // effectiveness：有效性
             mBufferInfo = new MediaCodec.BufferInfo();
             // wait for starting thread
             new Thread(this, getClass().getSimpleName()).start();
             try {
                 mSync.wait();
-            } catch (final InterruptedException e) {
+            } catch (final InterruptedException ignored) {
             }
         }
     }
 
-    public String getOutputPath() {
-        final MediaMuxerWrapper muxer = mWeakMuxer.get();
-        return muxer != null ? muxer.getOutputPath() : null;
-    }
+//    public String getOutputPath() {
+//        final MediaMuxerWrapper muxer = mWeakMuxer.get();
+//        return muxer != null ? muxer.getOutputPath() : null;
+//    }
 
     /**
      * the method to indicate frame data is soon available or already available
@@ -110,6 +112,8 @@ public abstract class MediaEncoder implements Runnable {
      */
     @Override
     public void run() {
+        // 声音线程的最高级别，优先程度较THREAD_PRIORITY_AUDIO要高。代码中无法设置为该优先级。值为-19。
+        // priority 优先级：-20  ------>  +19 ，对应最高优先级------> 最低优先级。
         android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO);
         synchronized (mSync) {
             mRequestStop = false;
@@ -282,6 +286,7 @@ public abstract class MediaEncoder implements Runnable {
 
     /**
      * drain encoded data and write them to muxer
+     * drain：流出
      */
     protected void drain() {
         if (mMediaCodec == null) return;
@@ -360,6 +365,7 @@ public abstract class MediaEncoder implements Runnable {
                     }
                     // write encoded data to muxer(need to adjust presentationTimeUs.
                     mBufferInfo.presentationTimeUs = getPTSUs();
+                    // 向mp4文件中写入数据
                     muxer.writeSampleData(mTrackIndex, encodedData, mBufferInfo);
                     prevOutputPTSUs = mBufferInfo.presentationTimeUs;
                 }

@@ -5,3 +5,9 @@ AudioRecord 实现录音，更接近底层
 AudioTrack 实现播放声音
 研究：ByteBuffer
 MediaCodec
+
+MediaRecorder 录制视频
+MediaCodec
+FFmpeg+x264/openh264
+
+MediaMuxer
